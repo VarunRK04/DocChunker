@@ -1,0 +1,22 @@
+# Hide virtual environments
+.venv/
+venv/
+
+# Hide compiled Python
+__pycache__/
+*.pyc
+
+# Don't upload sensitive files
+.env
+
+# Skip all uploaded or extracted files
+uploads/
+*.pdf
+*.log
+*.tmp
+
+# Skip extracted image files
+*.png
+*.jpg
+*.jpeg
+*.svg
