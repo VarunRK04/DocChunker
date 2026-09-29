@@ -179,5 +179,3 @@ pytest -q          # offline: uses the hashing embedder and temporary SQLite sto
 ```
 
 ---
-
-<div align="center">Built by <a href="https://github.com/VarunRK04">Varun</a></div>
