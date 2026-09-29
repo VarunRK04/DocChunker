@@ -20,3 +20,10 @@ uploads/
 *.jpg
 *.jpeg
 *.svg
+
+# v2 local data
+.docchunker/
+reconstructed_*.txt
+*.egg-info/
+.pytest_cache/
+.pytest_tmp/
