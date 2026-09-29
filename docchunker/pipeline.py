@@ -16,6 +16,14 @@ from .search import blend, mmr
 from .store import VectorStore, get_store
 
 BATCH = 64
+_SKIP_DIRS = {"node_modules", "__pycache__", "venv", "env", "site-packages"}
+
+
+def _wanted(root: Path, f: Path) -> bool:
+    if f.suffix.lower() not in SUPPORTED or not f.is_file():
+        return False
+    parts = f.relative_to(root).parts[:-1]
+    return not any(x.startswith(".") or x in _SKIP_DIRS for x in parts)
 
 
 @dataclass
@@ -31,9 +39,19 @@ class DocChunker:
     def __init__(self, settings: Settings | None = None, store: VectorStore | None = None,
                  embedder: Embedder | None = None):
         self.settings = settings or Settings.from_env()
-        self.embedder = embedder or get_embedder(self.settings)
         self.store = store or get_store(self.settings)
-        self.store.bind(self.embedder.name, self.embedder.dim)
+        self._embedder = embedder
+        if embedder is not None:
+            self.store.bind(embedder.name, embedder.dim)
+
+    @property
+    def embedder(self) -> Embedder:
+        """Loaded on first use so listing/deleting documents never pays for model start-up."""
+        if self._embedder is None:
+            emb = get_embedder(self.settings)
+            self.store.bind(emb.name, emb.dim)
+            self._embedder = emb
+        return self._embedder
 
     # ---- ingest -------------------------------------------------------------------------
     def ingest_file(self, path: str | Path, force: bool = False) -> IngestResult:
@@ -57,7 +75,7 @@ class DocChunker:
     def ingest_path(self, path: str | Path, force: bool = False,
                     on_error: Callable[[Path, Exception], None] | None = None) -> list[IngestResult]:
         p = Path(path)
-        files = [p] if p.is_file() else sorted(f for f in p.rglob("*") if f.suffix.lower() in SUPPORTED)
+        files = [p] if p.is_file() else sorted(f for f in p.rglob("*") if _wanted(p, f))
         if not files:
             raise FileNotFoundError(f"No supported files found at {p}")
         results = []

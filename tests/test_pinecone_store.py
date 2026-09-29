@@ -102,3 +102,12 @@ def test_long_text_is_clipped_under_metadata_limit(pdc):
     pdc.store.add_doc(DocInfo("d", "n", "p", 1, len(big), 1.0), [c], np.ones((1, 512), dtype=np.float32))
     stored = pdc.store.index.rows[("ns", "d:000000")]["metadata"]["text"]
     assert len(stored.encode()) <= 30_000
+
+
+def test_read_operations_work_without_bind():
+    client = FakeClient(dim=512)
+    store = PineconeStore("idx", "ns", client=client)
+    assert store.list_docs() == []  # no bind() (and so no embedder) needed to list
+    missing = PineconeStore("nope", "ns", client=FakeClient(dim=None))
+    with pytest.raises(KeyError, match="does not exist"):
+        missing.list_docs()

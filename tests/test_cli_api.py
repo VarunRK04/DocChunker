@@ -58,3 +58,14 @@ def test_api(dc, corpus):
     assert "Dogs are loyal" in c.get(f"/docs-index/{doc_id}/text").json()["text"]
     assert c.delete(f"/docs-index/{doc_id}").status_code == 200
     assert c.get(f"/docs-index/{doc_id}/text").status_code == 404
+
+
+def test_api_rejects_oversized_upload(dc, monkeypatch):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from docchunker import api
+
+    monkeypatch.setattr(api, "MAX_UPLOAD_BYTES", 10)
+    c = TestClient(api.create_app(dc=dc))
+    assert c.post("/ingest", files={"file": ("big.txt", b"x" * 11)}).status_code == 413

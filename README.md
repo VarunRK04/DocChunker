@@ -16,7 +16,7 @@ v1 (seven loose scripts, fake embeddings) is preserved under the git tag `v1`.
 | Re-upload duplicated the document | Content-hash doc ids: re-ingesting is a no-op |
 | Keyword code/text heuristic (`if`/`for` lines = code) | Line-level scoring; prose that starts with "If..." stays text |
 | Chunks lost their page | Chunks never cross pages; each carries page number and exact source offsets |
-| No tests | 38 pytest tests |
+| No tests | 43 pytest tests |
 
 ## Install
 

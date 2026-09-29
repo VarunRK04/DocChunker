@@ -91,3 +91,40 @@ def test_embedder_mismatch_detected(dc):
     with pytest.raises(StoreMismatch):
         other.bind("hashing-64", 64)
     other.bind(HashingEmbedder().name, HashingEmbedder().dim)  # same embedder is fine
+
+
+def test_folder_ingest_skips_hidden_and_vendor_dirs(dc, corpus):
+    for d in (".git", ".venv", "node_modules"):
+        (corpus / d).mkdir()
+        (corpus / d / "junk.md").write_text("should never be indexed")
+    (corpus / "sub").mkdir()
+    (corpus / "sub" / "deep.md").write_text("A nested markdown note about kittens.")
+    names = sorted(r.name for r in dc.ingest_path(corpus))
+    assert names == ["cooking.txt", "deep.md", "pets.txt"]
+
+
+def test_embedder_is_lazy(tmp_path, corpus, monkeypatch):
+    from docchunker import pipeline
+    from docchunker.config import Settings
+
+    calls = []
+    monkeypatch.setattr(pipeline, "get_embedder", lambda s: calls.append(1) or HashingEmbedder())
+    dc = pipeline.DocChunker(Settings(data_dir=tmp_path / "lazy", embedder="hashing"))
+    assert dc.documents() == [] and calls == []  # listing needs no model
+    dc.ingest_file(corpus / "pets.txt")
+    dc.search("dog")
+    assert calls == [1]  # loaded once, then reused
+
+
+def test_docx_and_markdown(dc, tmp_path):
+    docx = pytest.importorskip("docx")
+    d = docx.Document()
+    d.add_paragraph("Quarterly report on canine dermatology.")
+    t = d.add_table(rows=1, cols=2)
+    t.rows[0].cells[0].text, t.rows[0].cells[1].text = "Metric", "Accuracy 91%"
+    d.save(tmp_path / "r.docx")
+    (tmp_path / "n.md").write_text("# Title\n\nSome *markdown* body about vaccines.\r\nSecond line.", encoding="utf-8")
+
+    r1, r2 = dc.ingest_file(tmp_path / "r.docx"), dc.ingest_file(tmp_path / "n.md")
+    assert "Accuracy 91%" in dc.reconstruct(r1.doc_id)
+    assert "\r" not in dc.reconstruct(r2.doc_id)

@@ -61,11 +61,20 @@ class PineconeStore(VectorStore):
                 )
         self.index = self.pc.Index(self.index_name)
 
+    def _ix(self):
+        """Index handle; usable without bind() for read/list/delete on an existing index."""
+        if self.index is None:
+            names = {i["name"] if isinstance(i, dict) else i.name for i in self.pc.list_indexes()}
+            if self.index_name not in names:
+                raise KeyError(f"Pinecone index {self.index_name!r} does not exist yet; ingest something first")
+            self.index = self.pc.Index(self.index_name)
+        return self.index
+
     def _ns(self) -> dict:
         return {"namespace": self.namespace}
 
     def has_doc(self, doc_id: str) -> bool:
-        return bool(_get(self.index.fetch(ids=[_DOC_PREFIX + doc_id], **self._ns()), "vectors"))
+        return bool(_get(self._ix().fetch(ids=[_DOC_PREFIX + doc_id], **self._ns()), "vectors"))
 
     def add_doc(self, info: DocInfo, chunks, vectors) -> None:
         self.delete_doc(info.doc_id)
@@ -89,7 +98,7 @@ class PineconeStore(VectorStore):
                         "metadata": {"record_type": "doc", "doc_id": info.doc_id, "info": info_json}})
         # the marker goes last: a doc only counts as present once every chunk was written
         for i in range(0, len(records), 100):
-            self.index.upsert(vectors=records[i : i + 100], **self._ns())
+            self._ix().upsert(vectors=records[i : i + 100], **self._ns())
 
     @staticmethod
     def _to_chunk(id_: str, md: dict) -> Chunk:
@@ -102,7 +111,7 @@ class PineconeStore(VectorStore):
             flt["doc_id"] = {"$eq": doc_id}
         if kind:
             flt["kind"] = {"$eq": kind}
-        res = self.index.query(
+        res = self._ix().query(
             vector=[float(x) for x in vector], top_k=k, filter=flt, include_metadata=True,
             include_values=with_vectors, **self._ns(),
         )
@@ -114,14 +123,14 @@ class PineconeStore(VectorStore):
 
     def _list_ids(self, prefix: str) -> list[str]:
         ids: list[str] = []
-        for page in self.index.list(prefix=prefix, **self._ns()):  # generator of id lists
+        for page in self._ix().list(prefix=prefix, **self._ns()):  # generator of id lists
             ids.extend(page)
         return ids
 
     def _fetch_all(self, ids: list[str]) -> dict:
         out: dict = {}
         for i in range(0, len(ids), 100):
-            out.update(_get(self.index.fetch(ids=ids[i : i + 100], **self._ns()), "vectors"))
+            out.update(_get(self._ix().fetch(ids=ids[i : i + 100], **self._ns()), "vectors"))
         return out
 
     def get_chunks(self, doc_id: str) -> list[Chunk]:
@@ -143,6 +152,6 @@ class PineconeStore(VectorStore):
         existed = bool(ids) or self.has_doc(doc_id)
         if existed:
             for i in range(0, len(ids), 1000):
-                self.index.delete(ids=ids[i : i + 1000], **self._ns())
-            self.index.delete(ids=[marker], **self._ns())
+                self._ix().delete(ids=ids[i : i + 1000], **self._ns())
+            self._ix().delete(ids=[marker], **self._ns())
         return existed
